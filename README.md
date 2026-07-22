@@ -5,6 +5,7 @@
 `REG-SourceChat` is an AI-powered PDF RAG (Retrieval-Augmented Generation) application built with Node.js. It allows users to upload PDF files, process them asynchronously, extract and chunk document text using LangChain, and prepare the data for semantic search and question answering.
 
 This repository includes:
+
 - a backend API built with `Express.js`
 - asynchronous upload processing using `BullMQ`
 - PDF parsing with `LangChain`
