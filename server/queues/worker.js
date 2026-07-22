@@ -3,6 +3,7 @@ import fs from "fs";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { createDocument } from "../models/documentModel.js";
+import { ensureCollection } from "../models/qdrantClient.js";
 
 const connection = {
   host: process.env.REDIS_HOST || "127.0.0.1",
@@ -53,6 +54,9 @@ const worker = new Worker(
         if (!chunkedDocs || chunkedDocs.length === 0) {
           throw new Error(`Failed to chunk PDF documents: ${originalname}`);
         }
+
+        // Ensure Qdrant collection exists before storing/embed steps
+        await ensureCollection("documents");
 
         // Store each chunk as a separate document entry
         const storedChunks = chunkedDocs.map((chunk, index) => {
