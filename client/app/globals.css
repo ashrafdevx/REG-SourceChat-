@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+:root {
+  --background: #020617;
+  --foreground: #e2e8f0;
+  --app-font-sans: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --app-font-mono: "Consolas", "SFMono-Regular", "Liberation Mono", monospace;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--app-font-sans);
+  --font-mono: var(--app-font-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #020617;
+    --foreground: #e2e8f0;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--app-font-sans);
+  margin: 0;
+}
+
+.tiny-marquee {
+  display: inline-block;
+  min-width: max-content;
+  animation: tiny-marquee 16s linear infinite;
+}
+
+@keyframes tiny-marquee {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-45%);
+  }
+}
