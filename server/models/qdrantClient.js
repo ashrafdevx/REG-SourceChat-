@@ -52,22 +52,14 @@ export async function ensureCollection(collectionName, vectorSize = 1536) {
 
   try {
     // Try to get collections
-    let collections = [];
-    if (c.getCollections) {
-      const res = await c.getCollections();
-      collections = res.collections || [];
-    } else if (c.collections && typeof c.collections === "function") {
-      // Some APIs have collections as a method
-      const res = await c.collections();
-      collections = res.collections || [];
-    }
-
+    const res = await c.getCollections();
+    const collections = res.collections || [];
     const exists = collections.some((x) => x.name === collectionName);
 
     if (!exists) {
       if (c.createCollection) {
-        await c.createCollection({
-          collection_name: collectionName,
+        // createCollection uses positional args: collectionName, vectorsConfig
+        await c.createCollection(collectionName, {
           vectors: {
             size: vectorSize,
             distance: "Cosine",
