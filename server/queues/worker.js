@@ -3,7 +3,8 @@ import fs from "fs";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { createDocument } from "../models/documentModel.js";
-import { ensureCollection } from "../models/qdrantClient.js";
+import { ensureCollection, upsertPoints } from "../models/qdrantClient.js";
+import { generateEmbedding } from "../models/embeddingGenerator.js";
 
 const connection = {
   host: process.env.REDIS_HOST || "127.0.0.1",
@@ -58,7 +59,8 @@ const worker = new Worker(
         // Ensure Qdrant collection exists before storing/embed steps
         await ensureCollection("documents");
 
-        // Store each chunk as a separate document entry
+        // Store each chunk as a separate document entry and generate embeddings
+        const qdrantPoints = [];
         const storedChunks = chunkedDocs.map((chunk, index) => {
           const chunkMetadata = {
             originalFilename: originalname,
@@ -71,8 +73,9 @@ const worker = new Worker(
             pdf: chunk.metadata.pdf,
           };
 
+          const chunkId = `${job.id}-${index + 1}`;
           const chunkDocument = {
-            id: `${job.id}-${index + 1}`,
+            id: chunkId,
             filename: originalname,
             mimetype,
             uploadedAt: new Date().toISOString(),
@@ -87,10 +90,47 @@ const worker = new Worker(
           return chunk;
         });
 
+        // Generate embeddings for all chunks
+        console.log(`[PDF Processing] Generating embeddings for ${storedChunks.length} chunks...`);
+        const chunkTexts = storedChunks.map((chunk) => chunk.pageContent);
+
+        for (let i = 0; i < storedChunks.length; i++) {
+          const chunkId = `${job.id}-${i + 1}`;
+          const chunkText = storedChunks[i].pageContent;
+
+          try {
+            const vector = await generateEmbedding(chunkText);
+
+            if (vector && vector.length > 0) {
+              qdrantPoints.push({
+                id: chunkId,
+                vector: vector,
+                payload: {
+                  filename: originalname,
+                  chunkIndex: i + 1,
+                  totalChunks: storedChunks.length,
+                  text: chunkText.substring(0, 500), // Store first 500 chars in payload
+                  uploadedAt: new Date().toISOString(),
+                },
+              });
+            }
+          } catch (err) {
+            console.warn(
+              `[PDF Processing] Failed to embed chunk ${i + 1}: ${err.message}`,
+            );
+          }
+        }
+
+        // Upsert all vectors to Qdrant
+        if (qdrantPoints.length > 0) {
+          await upsertPoints("documents", qdrantPoints);
+        }
+
         console.log(`[PDF Processing] Successfully chunked job ${job.id}:`, {
           filename: originalname,
           pages: langchainDocs.length,
           chunkCount: storedChunks.length,
+          embeddedChunks: qdrantPoints.length,
           sizeKB: (fileSize / 1024).toFixed(2),
         });
 

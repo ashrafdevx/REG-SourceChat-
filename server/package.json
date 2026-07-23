@@ -17,6 +17,7 @@
     "@langchain/google-genai": "^2.2.0",
     "@langchain/qdrant": "^1.0.3",
     "@langchain/textsplitters": "^1.0.1",
+    "@qdrant/js-client-rest": "^1.18.0",
     "bullmq": "^5.80.10",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
