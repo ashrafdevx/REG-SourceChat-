@@ -91,7 +91,9 @@ const worker = new Worker(
         });
 
         // Generate embeddings for all chunks
-        console.log(`[PDF Processing] Generating embeddings for ${storedChunks.length} chunks...`);
+        console.log(
+          `[PDF Processing] Generating embeddings for ${storedChunks.length} chunks...`,
+        );
         const chunkTexts = storedChunks.map((chunk) => chunk.pageContent);
 
         for (let i = 0; i < storedChunks.length; i++) {
@@ -100,7 +102,7 @@ const worker = new Worker(
 
           try {
             const vector = await generateEmbedding(chunkText);
-
+            console.log("vector", vector);
             if (vector && vector.length > 0) {
               qdrantPoints.push({
                 id: chunkId,

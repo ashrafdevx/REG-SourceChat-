@@ -43,7 +43,10 @@ async function initEmbeddings() {
     console.log("[Embeddings] Initialized Google Gemini embeddings model");
     return embeddingsModel;
   } catch (err) {
-    console.warn("[Embeddings] Failed to initialize Gemini embeddings:", err.message);
+    console.warn(
+      "[Embeddings] Failed to initialize Gemini embeddings:",
+      err.message,
+    );
     // Fallback to mock
     embeddingsModel = {
       embedQuery: async (text) => {

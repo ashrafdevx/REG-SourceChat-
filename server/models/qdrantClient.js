@@ -9,38 +9,41 @@ let client = null;
 async function initQdrantClient() {
   if (client) return client;
 
-  // Try the official JS client first
+  // Try the official JS REST client first
   try {
-    // @qdrant/js-client-rest
     const mod = await import("@qdrant/js-client-rest");
-    client = new mod.QdrantClient({ url: QDRANT_URL });
+    // The API uses QdrantClient constructor with just URL
+    const QdrantClient = mod.QdrantClient || mod.default;
+    client = new QdrantClient({
+      url: QDRANT_URL,
+    });
+    console.log(`[Qdrant] Connected to ${QDRANT_URL}`);
     return client;
   } catch (e) {
-    // fallthrough
+    console.warn(`[Qdrant] Failed to load @qdrant/js-client-rest:`, e.message);
   }
 
   try {
     // try generic qdrant-client package (API may vary)
     const mod2 = await import("qdrant-client");
-    // some clients export default or named constructors
     const QdrantCtor = mod2.QdrantClient || mod2.default || mod2;
-    // try a few constructor signatures
     try {
       client = new QdrantCtor({ url: QDRANT_URL });
     } catch (err) {
       try {
         client = new QdrantCtor(QDRANT_URL);
       } catch (err2) {
-        client = QdrantCtor; // last resort
+        client = QdrantCtor;
       }
     }
     return client;
   } catch (err) {
     console.warn(
-      "No Qdrant client library is installed. Install @qdrant/js-client-rest for full Qdrant support.",
+      "[Qdrant] No Qdrant client library found. Install @qdrant/js-client-rest.",
     );
-    throw err;
   }
+
+  return null;
 }
 
 export async function ensureCollection(collectionName, vectorSize = 1536) {
@@ -48,35 +51,39 @@ export async function ensureCollection(collectionName, vectorSize = 1536) {
   if (!c) return;
 
   try {
-    // Modern client exposes "getCollections" or "collections" methods
+    // Try to get collections
+    let collections = [];
     if (c.getCollections) {
       const res = await c.getCollections();
-      const exists = (res.collections || []).some(
-        (x) => x.name === collectionName,
-      );
-      if (!exists && c.createCollection) {
+      collections = res.collections || [];
+    } else if (c.collections && typeof c.collections === "function") {
+      // Some APIs have collections as a method
+      const res = await c.collections();
+      collections = res.collections || [];
+    }
+
+    const exists = collections.some((x) => x.name === collectionName);
+
+    if (!exists) {
+      if (c.createCollection) {
         await c.createCollection({
           collection_name: collectionName,
-          vectors: { size: vectorSize, distance: "Cosine" },
+          vectors: {
+            size: vectorSize,
+            distance: "Cosine",
+          },
         });
-      }
-    } else if (c.collections && c.collections.list) {
-      const list = await c.collections.list();
-      const exists = list.some((x) => x.name === collectionName);
-      if (!exists && c.collections.create) {
-        await c.collections.create({
-          name: collectionName,
-          vectors: { size: vectorSize, distance: "Cosine" },
-        });
+        console.log(
+          `[Qdrant] Created collection '${collectionName}' with ${vectorSize} dimensions`,
+        );
+      } else {
+        console.warn("[Qdrant] createCollection method not available");
       }
     } else {
-      console.warn(
-        "Qdrant client present but collection API shape not recognized.",
-      );
+      console.log(`[Qdrant] Collection '${collectionName}' already exists`);
     }
-    console.log(`Qdrant: ensured collection '${collectionName}'`);
   } catch (err) {
-    console.warn("Qdrant ensureCollection failed:", err?.message || err);
+    console.warn(`[Qdrant] ensureCollection error:`, err?.message || err);
   }
 }
 
@@ -87,25 +94,40 @@ export async function getClient() {
 export async function upsertPoints(collectionName, points) {
   const c = await initQdrantClient();
   if (!c || !points || points.length === 0) {
-    console.warn("No points to upsert or Qdrant client not available");
+    console.warn("[Qdrant] No points to upsert or Qdrant client not available");
     return;
   }
 
   try {
-    // Try different client API signatures
+    // Convert string IDs to numeric if needed (Qdrant requires numeric IDs)
+    const convertedPoints = points.map((p) => ({
+      ...p,
+      id: typeof p.id === "string" ? hashStringToNumber(p.id) : p.id,
+    }));
+
+    // Upsert points into collection
     if (c.upsert) {
-      await c.upsert(collectionName, { points });
-    } else if (c.points && c.points.upsert) {
-      await c.points.upsert(collectionName, { points });
+      await c.upsert(collectionName, { points: convertedPoints });
     } else {
-      console.warn("Qdrant client upsert method not recognized");
+      console.warn("[Qdrant] upsert method not available");
     }
     console.log(
-      `[Qdrant] Upserted ${points.length} points into collection '${collectionName}'`,
+      `[Qdrant] Upserted ${convertedPoints.length} points into collection '${collectionName}'`,
     );
   } catch (err) {
-    console.error("Qdrant upsertPoints failed:", err?.message || err);
+    console.warn(`[Qdrant] upsertPoints error:`, err?.message || err);
   }
+}
+
+// Helper: convert string IDs to numeric (Qdrant requires numeric point IDs)
+function hashStringToNumber(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
 }
 
 export default {
